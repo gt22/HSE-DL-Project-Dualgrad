@@ -12,7 +12,8 @@ class DualTensor:
     def __init__(self, a: Optional[np.ndarray] = None, b: Optional[np.ndarray] = None):
         self.shape = a.shape if a is not None else (b.shape if b is not None else (1,))
         self.a = a if a is not None else np.zeros(self.shape)
-        self.b = b if b is not None else np.zeros(self.shape)
+        self.b = b.astype(self.a.dtype) if b is not None else np.zeros(self.shape, dtype=self.a.dtype)
+        assert self.a.dtype == self.b.dtype
 
     def re(self) -> np.ndarray:
         return self.a
@@ -21,12 +22,12 @@ class DualTensor:
         return self.b
 
     def grad_target(self, idx):
-        b = np.zeros(self.shape)
+        b = np.zeros(self.shape, dtype=self.a.dtype)
         b[idx] = 1
         return DualTensor(self.a, b)
 
     def grad_nontarget(self):
-        return DualTensor(self.a, np.zeros(self.shape))
+        return DualTensor(self.a, np.zeros(self.shape, dtype=self.a.dtype))
 
     def __repr__(self):
         return f'DualTensor({self.a}, {self.b})'
@@ -52,39 +53,46 @@ class DualTensor:
         return DualTensor(np.full(expected_shape if expected_shape is not None else (1,), x))
 
     def __add__(self, other):
-        other = DualTensor.normalize(other, self.shape)
+        other = DualTensor.normalize(other)
         return DualTensor(self.a + other.a, self.b + other.b)
 
     def __radd__(self, other):
-        return DualTensor.normalize(other, self.shape) + self
+        return DualTensor.normalize(other) + self
 
     def __sub__(self, other):
-        other = DualTensor.normalize(other, self.shape)
+        other = DualTensor.normalize(other)
         return DualTensor(self.a - other.a, self.b - other.b)
 
     def __rsub__(self, other):
-        return DualTensor.normalize(other, self.shape) - self
+        return DualTensor.normalize(other) - self
 
     def __neg__(self):
         return DualTensor(-self.a, -self.b)
 
     def __abs__(self):
-        sgn = (self.a > 0) * 2 - 1  # like np.sign but return 1 on x==0
+        sgn = np.sign(self.a)
         return DualTensor(abs(self.a), self.b * sgn)
 
     def __mul__(self, other):
-        other = DualTensor.normalize(other, self.shape)
-        return DualTensor(self.a * other.a, self.a * other.b + other.a * self.b)
+        other = DualTensor.normalize(other)
+        return DualTensor(self.a * other.a, self.a * other.b + self.b * other.a)
 
     def __rmul__(self, other):
-        return DualTensor.normalize(other, self.shape) * self
+        return DualTensor.normalize(other) * self
+
+    def __matmul__(self, other):
+        other = DualTensor.normalize(other)
+        return DualTensor(self.a @ other.a, self.a @ other.b + self.b @ other.a)
+
+    def __rmatmul__(self, other):
+        return DualTensor.normalize(other) @ self
 
     def __truediv__(self, other):
-        other = DualTensor.normalize(other, self.shape)
+        other = DualTensor.normalize(other)
         return DualTensor(self.a / other.a, (self.b * other.a - self.a * other.b) / (other.a ** 2))
 
     def __rtruediv__(self, other):
-        return DualTensor.normalize(other, self.shape) / self
+        return DualTensor.normalize(other) / self
 
     def __floordiv__(self, other):
         print("WARNING: Using Dual floordiv, no gradient")
@@ -97,7 +105,7 @@ class DualTensor:
     def __mod__(self, other):
         print("WARNING: Using Dual mod, no gradient")
         other = DualTensor.normalize(other, self.shape)
-        return DualTensor(self.a % other.a, np.zeros(self.shape))
+        return DualTensor(self.a % other.a, np.zeros(self.shape, dtype=self.a.dtype))
 
     def __rmod__(self, other):
         return DualTensor.normalize(other, self.shape) % self

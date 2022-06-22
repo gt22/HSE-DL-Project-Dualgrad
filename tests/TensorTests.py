@@ -5,13 +5,13 @@ from typing import Callable, Iterable
 
 
 def generate(n, shape) -> Iterable[DualTensor]:
-    a = np.random.random((n, *shape)) * 5
-    b = np.random.random((n, *shape)) * 5
+    a = np.round(np.random.random((n, *shape)) * 20)
+    b = np.round(np.random.random((n, *shape)) * 20)
     for x, y in zip(a, b):
         yield DualTensor(x, y)
 
 
-def gradient_test(f: Callable[[DualTensor, DualTensor], DualTensor], shape1, shape2, eps=1e-5, rtol=1e-5):
+def gradient_test(f: Callable[[DualTensor, DualTensor], DualTensor], shape1, shape2, eps=1e-5, rtol=5e-5):
     a = generate(100, shape1)
     b = generate(100, shape2)
     for x, y in zip(a, b):
@@ -36,7 +36,7 @@ def value_test(f: Callable[[DualTensor, DualTensor], DualTensor], f_real: Callab
         dual = f(x, y).re()
         real = f_real(x.re(), y.re())
 
-        rel_tol = abs(dual - real) / (1 + np.minimum(dual, real))
+        rel_tol = abs(dual - real) / (1 + np.minimum(abs(dual), abs(real)))
         assert rel_tol.max() < rtol
 
 
@@ -81,33 +81,44 @@ def test_rmul():
     run_test(lambda x, y: y.__rmul__(x), (10, 10))
 
 
+def adjust_zero(x):
+    eps = 1e-5
+    re = x.re() if isinstance(x, DualTensor) else x
+    return x + (re == 0) * np.full_like(re, eps)
+
+
 def test_truediv():
-    run_test(lambda x, y: x / y, (10, 10))
+    run_test(lambda x, y: x / adjust_zero(y), (10, 10))
 
 
 def test_rtruediv():
-    run_test(lambda x, y: y.__rtruediv__(x), (10, 10))
+    run_test(lambda x, y: adjust_zero(y).__rtruediv__(x), (10, 10))
 
 
 def test_floordiv():
-    run_test(lambda x, y: x // y, (10, 10), run_grad=False)
+    run_test(lambda x, y: x // adjust_zero(y), (10, 10), run_grad=False)
 
 
 def test_rfloordiv():
-    run_test(lambda x, y: y.__rfloordiv__(x), (10, 10), run_grad=False)
+    run_test(lambda x, y: adjust_zero(y).__rfloordiv__(x), (10, 10), run_grad=False)
 
 
 def test_mod():
-    run_test(lambda x, y: x % y, (10, 10), run_grad=False)
+    run_test(lambda x, y: x % adjust_zero(y), (10, 10), run_grad=False)
 
 
 def test_rmod():
-    run_test(lambda x, y: y.__rmod__(x), (10, 10), run_grad=False)
+    run_test(lambda x, y: adjust_zero(y).__rmod__(x), (10, 10), run_grad=False)
 
 
 def test_pow():
-    run_test(lambda x, y: x ** y, (10, 10), (1, ))
+    run_test(lambda x, y: adjust_zero(x) ** y, (10, 10), (1,))
 
 
 def test_rpow():
-    run_test(lambda x, y: y.__rpow__(x), (10, 10), (1, ))
+    run_test(lambda x, y: y.__rpow__(adjust_zero(x)), (10, 10), (1,))
+
+
+# TODO: Rewrite gradient checker
+# def test_matmul():
+#     run_test(lambda x, y: x @ y, (1, 2), (2, 1))

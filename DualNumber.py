@@ -54,7 +54,7 @@ class DualNumber:
         return DualNumber(-self.a, -self.b)
 
     def __abs__(self):
-        return DualNumber(abs(self.a), self.b if self.a > 0 else -self.b)
+        return DualNumber(abs(self.a), self.b * np.sign(self.a))
 
     def __mul__(self, other):
         other = DualNumber.normalize(other)

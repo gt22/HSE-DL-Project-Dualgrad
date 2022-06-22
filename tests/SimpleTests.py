@@ -5,8 +5,8 @@ from typing import Callable
 
 
 def generate(n):
-    a = np.random.random(n) * 20
-    b = np.random.random(n) * 20
+    a = np.round(np.random.random(n) * 20)
+    b = np.round(np.random.random(n) * 20)
     for x, y in zip(a, b):
         yield DualNumber(x, y)
 
@@ -21,7 +21,7 @@ def gradient_test(f: Callable[[DualNumber, DualNumber], DualNumber], eps=1e-5, r
         num_grad = (z2 - z1) / (2 * eps)
         exact_grad = f(x.grad_target(), y.grad_nontarget()).im()
         if not np.isnan(exact_grad):
-            rel_tol = abs(num_grad - exact_grad) / (1 + min(abs(num_grad), abs()))
+            rel_tol = abs(num_grad - exact_grad) / (1 + min(abs(num_grad), abs(exact_grad)))
             assert rel_tol < rtol
 
 
@@ -32,7 +32,7 @@ def value_test(f: Callable[[DualNumber, DualNumber], DualNumber], f_real: Callab
         dual = f(x, y).re()
         real = f_real(x.re(), y.re())
 
-        rel_tol = abs(dual - real) / (1 + min(dual, real))
+        rel_tol = abs(dual - real) / (1 + min(abs(dual), abs(real)))
         assert rel_tol < rtol
 
 
@@ -75,28 +75,36 @@ def test_rmul():
     run_test(lambda x, y: y.__rmul__(x))
 
 
+def adjust_zero(x):
+    eps = 1e-5
+    re = x.re() if isinstance(x, DualNumber) else x
+    if re == 0:
+        return x + eps
+    return x
+
+
 def test_truediv():
-    run_test(lambda x, y: x / y)
+    run_test(lambda x, y: x / adjust_zero(y))
 
 
 def test_rtruediv():
-    run_test(lambda x, y: y.__rtruediv__(x))
+    run_test(lambda x, y: adjust_zero(y).__rtruediv__(x))
 
 
 def test_floordiv():
-    run_test(lambda x, y: x // y, run_grad=False)
+    run_test(lambda x, y: x // adjust_zero(y), run_grad=False)
 
 
 def test_rfloordiv():
-    run_test(lambda x, y: y.__rfloordiv__(x), run_grad=False)
+    run_test(lambda x, y: adjust_zero(y).__rfloordiv__(x), run_grad=False)
 
 
 def test_mod():
-    run_test(lambda x, y: x % y, run_grad=False)
+    run_test(lambda x, y: x % adjust_zero(y), run_grad=False)
 
 
 def test_rmod():
-    run_test(lambda x, y: y.__rmod__(x), run_grad=False)
+    run_test(lambda x, y: adjust_zero(y).__rmod__(x), run_grad=False)
 
 
 def test_pow():
